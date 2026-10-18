@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web ECU Flasher (FTDI)</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f9; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px 0; width: 100%; }
+        button:disabled { background: #cccccc; }
+        .log { background: #222; color: #00ff00; padding: 15px; border-radius: 5px; font-family: monospace; height: 150px; overflow-y: scroll; margin-top: 15px; }
+        input[type="file"] { margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🏍️ Web ECU Flasher (FTDI USB)</h2>
+    <p>Hubungkan FTDI via OTG, lalu klik "Konekan FTDI".</p>
+    
+    <button id="btnConnect">🔌 Konekan FTDI / Alat Remap</button>
+    <button id="btnRead" disabled>📥 Read ECU (Backup Data)</button>
+    
+    <hr>
+    
+    <h3>⚡ Upload File Remap (.bin)</h3>
+    <input type="file" id="fileBin" accept=".bin" disabled>
+    <button id="btnFlash" disabled>🔥 Flash / Write ECU</button>
+    
+    <h3>📋 Log Aktivitas:</h3>
+    <div class="log" id="logOutput">Menunggu koneksi...<br></div>
+</div>
+
+<script>
+let port;
+let reader;
+let writer;
+
+const btnConnect = document.getElementById('btnConnect');
+const btnRead = document.getElementById('btnRead');
+const btnFlash = document.getElementById('btnFlash');
+const fileBin = document.getElementById('fileBin');
+const logOutput = document.getElementById('logOutput');
+
+function writeLog(text) {
+    logOutput.innerHTML += `> ${text}<br>`;
+    logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+// 1. Fungsi Hubungkan FTDI via Web Serial API
+btnConnect.addEventListener('click', async () => {
+    if ('serial' in navigator) {
+        try {
+            // Meminta user memilih perangkat FTDI USB
+            port = await navigator.serial.requestPort();
+            
+            // Konfigurasi Baud Rate (Umumnya ECU Keihin/Honda menggunakan 10400 atau 9600)
+            await port.open({ baudRate: 10400 }); 
+            
+            writer = port.writable.getWriter();
+            reader = port.readable.getReader();
+            
+            writeLog("✅ FTDI Terhubung Berhasil!");
+            btnRead.disabled = false;
+            fileBin.disabled = false;
+            
+            // Mulai mendengarkan data masuk dari ECU
+            readDataLoop();
+        } catch (error) {
+            writeLog("❌ Gagal terhubung: " + error.message);
+        }
+    } else {
+        alert("Browser Anda tidak mendukung Web Serial API. Gunakan Google Chrome versi terbaru!");
+    }
+});
+
+// 2. Loop untuk membaca data dari ECU secara Real-time
+async function readDataLoop() {
+    try {
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (value) {
+                // Mengubah data byte mentah ke bentuk Hexadecimal untuk diagnostik
+                let hexString = Array.from(value).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                writeLog(`Data Masuk (HEX): ${hexString.toUpperCase()}`);
+            }
+        }
+    } catch (error) {
+        writeLog("❌ Error saat membaca data: " + error.message);
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+// 3. Simulasi Read ECU (Kirim Perintah Inisialisasi K-Line KWP2000)
+btnRead.addEventListener('click', async () => {
+    writeLog("Mengirim sinyal inisialisasi (Wake-up) ke ECU...");
+    
+    // Contoh command KWP2000 untuk Start Diagnostic Session (tergantung protokol ECU)
+    let initCommand = new Uint8Array([0x81, 0x11, 0xF1, 0x81, 0x04]); 
+    
+    await writer.write(initCommand);
+    writeLog("Perintah dikirim. Menunggu respon ECU...");
+});
+
+// 4. Mengaktifkan tombol Flash saat file dipilih
+fileBin.addEventListener('change', () => {
+    if (fileBin.files.length > 0) {
+        btnFlash.disabled = false;
+        writeLog(`File siap: ${fileBin.files[0].name}`);
+    }
+});
+
+// 5. Jalankan Proses Flashing
+btnFlash.addEventListener('click', async () => {
+    const file = fileBin.files[0];
+    const fileReader = new FileReader();
+    
+    fileReader.onload = async (e) => {
+        let arrayBuffer = e.target.result;
+        let binData = new Uint8Array(arrayBuffer);
+        
+        writeLog(`Memulai proses Flashing... Total data: ${binData.length} bytes.`);
+        
+        // Proses pengiriman file bin per blok (misal per 64 atau 256 bytes)
+        // Di sini Anda harus mengimplementasikan protokol Write Memory By Address ECU Anda
+        
+        writeLog("⚡ Mengirim data ke ECU... (Simulasi)");
+        
+        // Contoh mengirim seluruh file (Hati-hati: ECU nyata butuh validasi checksum & per blok!)
+        await writer.write(binData); 
+        
+        writeLog("🎉 Proses Flash Selesai Berhasil!");
+    };
+    
+    fileReader.readAsArrayBuffer(file);
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web ECU Flasher & Scanner (FTDI)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 700px; margin: 0 auto; background-color: #f5f5f5; color: #333; }
+        h2 { text-align: center; color: #222; }
+        button { padding: 12px 18px; margin: 5px 2px; font-weight: bold; cursor: pointer; border: none; border-radius: 4px; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        select { padding: 10px; width: 100%; font-size: 16px; font-weight: bold; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        .btn-connect { background-color: #4CAF50; color: white; }
+        .btn-read { background-color: #008CBA; color: white; }
+        .btn-flash { background-color: #f44336; color: white; width: 100%; }
+        .btn-scan { background-color: #ff9800; color: white; }
+        .btn-clear { background-color: #777; color: white; }
+        .section { margin-top: 15px; padding: 20px; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        /* Log aktivitas diperlebar tinggi dan areanya */
+        #log { background: #1e1e1e; color: #00ff00; padding: 15px; height: 250px; overflow-y: auto; font-family: 'Courier New', monospace; border-radius: 4px; border: 2px solid #333; line-height: 1.5; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <h2>🏍 Web ECU Flasher & Scanner (FTDI USB)</h2>
+    <p style="text-align: center;">Hubungkan FTDI via OTG, pilih tipe motor, lalu lakukan koneksi.</p>
+
+    <!-- 1. Pilihan Tipe Motor -->
+    <div class="section">
+        <label for="motorType" style="font-weight: bold; font-size: 14px;">Pilih Tipe Motor / Protokol ECU:</label>
+        <select id="motorType">
+            <option value="honda">HONDA (Keihin / Shindengen - K-Line KWP2000)</option>
+            <option value="yamaha">YAMAHA (FI FI / FI ECU - K-Line proprietary)</option>
+        </select>
+    </div>
+
+    <!-- 2. Koneksi & Backup -->
+    <div class="section">
+        <button class="btn-connect" id="btnConnect">🔌 Konekan FTDI / Alat Remap</button>
+        <button class="btn-read" id="btnRead">📥 Read ECU (Backup Data)</button>
+    </div>
+
+    <!-- 3. Fitur Remap / Flash -->
+    <div class="section">
+        <h3>⚡ Upload File Remap (.bin)</h3>
+        <input type="file" id="fileInput" accept=".bin" style="margin-bottom: 15px; display: block;"><br>
+        <button class="btn-flash" id="btnFlash">🔥 Flash / Write ECU</button>
+    </div>
+
+    <!-- 4. Fitur Diagnosis / Scanner -->
+    <div class="section">
+        <h3>🔍 Fitur Diagnosis / Scanner ECU</h3>
+        <button class="btn-scan" id="btnReadDTC">🔎 Baca Kode Eror (DTC)</button>
+        <button class="btn-clear" id="btnClearDTC">❌ Hapus Kode Eror</button>
+    </div>
+
+    <!-- 5. Log Aktivitas Diperlebar -->
+    <div class="section">
+        <h3>📋 Log Aktivitas Terpadu:</h3>
+        <div id="log">Menunggu koneksi...</div>
+    </div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        const motorTypeSelect = document.getElementById('motorType');
+        let port;
+        let reader;
+
+        // Fungsi Helper untuk memperbarui log teks
+        function updateLog(message) {
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<br>[${time}] ${message}`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // 1. Logika Utama Koneksi FTDI via Web Serial API
+        document.getElementById('btnConnect').addEventListener('click', async () => {
+            const selectedMotor = motorTypeSelect.value.toUpperCase();
+            updateLog(`Mencoba menyambungkan ke FTDI untuk motor ${selectedMotor}...`);
+            
+            if ('serial' in navigator) {
+                try {
+                    // Membuka jendela pop-up browser untuk memilih perangkat hardware USB FTDI
+                    port = await navigator.serial.requestPort();
+                    
+                    // Baudrate standar K-Line ECU motor umumnya 9600 atau 10400 bps
+                    const targetBaud = 10400; 
+                    
+                    await port.open({ baudRate: targetBaud });
+                    updateLog(`✅ FTDI Berhasil Terhubung pada ${targetBaud} bps!`);
+                    updateLog(`Konfigurasi siap untuk mode: ${selectedMotor}`);
+                } catch (error) {
+                    updateLog(`❌ Gagal terhubung: ${error.message}`);
+                }
+            } else {
+                updateLog('❌ Browser Anda tidak mendukung Web Serial API. Gunakan Google Chrome atau Microsoft Edge di PC/Android.');
+            }
+        });
+
+        // 2. Simulasi/Placeholder Handler untuk Aksi Tombol Lainnya
+        document.getElementById('btnRead').addEventListener('click', () => {
+            if (!port) { updateLog('⚠️ Peringatan: Hubungkan FTDI terlebih dahulu!'); return; }
+            updateLog(`Memulai pencadangan (Read) data ECU ${motorTypeSelect.value.toUpperCase()}...`);
+            updateLog('Mengirimkan KWP Start Communication Request...');
+            // Logika membaca byte stream ECU diletakkan di sini
+        });
+
+        document.getElementById('btnFlash').addEventListener('click', () => {
+            if (!port) { updateLog('⚠️ Peringatan: Hubungkan FTDI terlebih dahulu!'); return; }
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length === 0) {
+                updateLog('❌ Silakan pilih file .bin terlebih dahulu sebelum melakukan Flash!');
+                return;
+            }
+            updateLog(`Memulai proses Flashing/Writing ECU ${motorTypeSelect.value.toUpperCase()}...`);
+            updateLog(`File target: ${fileInput.files[0].name}`);
+            // Logika pengiriman file bin per blok/sektor diletakkan di sini
+        });
+
+        document.getElementById('btnReadDTC').addEventListener('click', () => {
+            if (!port) { updateLog('⚠️ Peringatan: Hubungkan FTDI terlebih dahulu!'); return; }
+            updateLog(`Memindai kode kerusakan (DTC) pada sistem ${motorTypeSelect.value.toUpperCase()}...`);
+            updateLog('Mengirimkan Request DTC (Standard OBD-II Mode 03 / Manufacturer Specific)...');
+            // Logika parsing kode error sensor diletakkan di sini
+        });
+
+        document.getElementById('btnClearDTC').addEventListener('click', () => {
+            if (!port) { updateLog('⚠️ Peringatan: Hubungkan FTDI terlebih dahulu!'); return; }
+            updateLog(`Mengirimkan instruksi hapus riwayat kerusakan (Clear DTC) ke ECU ${motorTypeSelect.value.toUpperCase()}...`);
+            // Logika pembersihan EEPROM error diletakkan di sini
+        });
+    </script>
+
+</body>
+</html>
